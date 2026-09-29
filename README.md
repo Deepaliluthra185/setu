@@ -10,13 +10,15 @@
 Public complaints often arrive across fragmented portals, in Romanized regional dialects (Hinglish, Punjabi, etc.), disconnected from ground infrastructure deficit indices. Setu bridges the gap by fusing natural language demand with demographic density, baseline infrastructure deficit indices, and capital coverage metrics.
 
 ### Key Pillars
-1. **Multilingual NLU Intake**: Two-layer classifier (Fast offline keyword engine + Google Gemini 2.5 Flash hybrid classification) supporting English, Romanized Hindi, Punjabi, and code-switched vernacular.
+1. **Multilingual NLU & Multimodal Audio Intake**: Two-layer classifier (Fast offline keyword engine + Google Gemini 2.5 Flash hybrid classification) supporting text and audio file uploads (`.mp3`, `.wav`, `.m4a`) in English, Romanized Hindi, Punjabi, and code-switched vernacular.
 2. **Explainable Priority Algorithm**: Dynamic scoring balancing demand intensity, baseline infrastructure deficit index, and small-district equity boosts.
 3. **Interactive Control Room**: SVG Spatial Demand Hotspot map, live District Inspector, and top action ranking.
-4. **Authentic CPGRAMS Baseline**: Grounded with DARPG monthly grievance data and state-level category distributions.
-5. **What-If Capital Allocation Simulator**: Interactive policy simulator projecting national infrastructure coverage gains.
-6. **Post-Funding Resolution Trajectories**: 6-month post-commissioning decay models for tracking long-term outcomes.
-7. **BRICS Shared Model Simulation**: Illustrative privacy-preserving federated learning across partner nations.
+4. **Capital Budget Optimizer**: Automated 0/1 Knapsack solver finding mathematically optimal district combinations under arbitrary budget limits (₹ Cr).
+5. **Authentic CPGRAMS Baseline**: Grounded with DARPG monthly grievance data and state-level category distributions.
+6. **What-If Capital Allocation Simulator**: Interactive policy simulator projecting national infrastructure coverage gains.
+7. **Post-Funding Resolution Trajectories**: 6-month post-commissioning decay models for tracking long-term outcomes.
+8. **One-Click Dossier Export**: Instant CSV download and print-ready executive briefing summaries for policymakers.
+9. **BRICS Shared Model Simulation**: Illustrative privacy-preserving federated learning across partner nations.
 
 ---
 

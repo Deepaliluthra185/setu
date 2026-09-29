@@ -260,3 +260,78 @@ def analyze_complaint(text: str) -> Dict[str, Any]:
     # Cache result
     _NLU_CACHE[cache_key] = result
     return result.copy()
+
+
+def analyze_audio_complaint(file_bytes: bytes, mime_type: str = "audio/mp3") -> Dict[str, Any]:
+    """
+    Multimodal audio grievance classifier.
+    Uses Gemini 2.5 Flash native audio comprehension to transcribe vernacular voice notes
+    and classify category, district, and urgency.
+    """
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key or api_key == "your_gemini_api_key_here":
+        return {
+            "transcribed_text": "(Audio processing requires GEMINI_API_KEY in .env)",
+            "category": "General",
+            "location": "Unknown",
+            "urgency": "Normal",
+            "language_detected": "Audio (Offline Fallback)"
+        }
+
+    try:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=api_key)
+        prompt = f"""You are an AI civic grievance classifier for India's Setu infrastructure platform.
+Listen carefully to this citizen voice recording and extract structured JSON with these exact keys:
+- "transcribed_text": Verbatim or translated transcription of what the citizen said
+- "category": Must be one of ["Water", "Roads", "Power", "Sanitation", "Health", "General"]
+- "location": Exact matching district from this list: {DISTRICT_NAMES} or "Unknown"
+- "urgency": "Urgent" or "Normal"
+- "language_detected": e.g. "Hindi", "Punjabi", "English", "Bhojpuri", "Mixed", etc.
+
+Respond with ONLY valid JSON:"""
+
+        audio_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[audio_part, prompt]
+        )
+        raw = response.text.strip() if response and response.text else None
+        if not raw:
+            raise ValueError("Empty response from model")
+
+        if raw.startswith("```"):
+            raw = re.sub(r"^```(?:json)?", "", raw)
+            raw = re.sub(r"```$", "", raw).strip()
+
+        data = json.loads(raw)
+        cat = data.get("category", "General")
+        if cat not in CATEGORIES:
+            cat = "General"
+
+        loc = data.get("location", "Unknown")
+        if loc not in DISTRICT_NAMES and loc != "Unknown":
+            loc = detect_location(str(data.get("transcribed_text", "")).lower())
+
+        urgency = "Urgent" if str(data.get("urgency", "")).lower() == "urgent" else "Normal"
+        lang = str(data.get("language_detected", "Audio"))
+        transcribed = str(data.get("transcribed_text", "Voice grievance captured.")).strip()
+
+        return {
+            "transcribed_text": transcribed,
+            "category": cat,
+            "location": loc,
+            "urgency": urgency,
+            "language_detected": lang
+        }
+    except Exception:
+        return {
+            "transcribed_text": "(Audio processing failed or format unsupported)",
+            "category": "General",
+            "location": "Unknown",
+            "urgency": "Normal",
+            "language_detected": "Audio Error"
+        }
+

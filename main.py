@@ -5,11 +5,14 @@ FastAPI Application serving REST endpoints and hosting the control-room frontend
 
 import os
 import json
+import io
+import csv
+from itertools import combinations
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import List, Dict, Any, Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -58,6 +61,10 @@ class SimulateInput(BaseModel):
     funded: List[str] = Field(..., example=["Rampur", "Devnagar"])
 
 
+class OptimizeInput(BaseModel):
+    budget_cr: float = Field(..., gt=0, example=50.0)
+
+
 # Endpoints
 @app.post("/complaints")
 async def process_complaint(payload: ComplaintInput):
@@ -95,6 +102,53 @@ async def process_complaint(payload: ComplaintInput):
     return {
         "status": "success",
         "complaint_id": complaint_id,
+        "category": category,
+        "location": location,
+        "urgency": urgency,
+        "language_detected": language_detected,
+        "district_matched": district_updated,
+        "district_name": district["name"] if district else None,
+        "complaints_added": increment_amount
+    }
+
+
+@app.post("/complaints/audio")
+async def process_audio_complaint(file: UploadFile = File(...)):
+    """
+    Multimodal grievance intake for vernacular voice notes (.mp3, .wav, .m4a, .ogg).
+    Uses Gemini 2.5 Flash native audio comprehension to transcribe and extract parameters.
+    """
+    contents = await file.read()
+    mime = file.content_type or "audio/mp3"
+    nlu_result = nlu.analyze_audio_complaint(contents, mime)
+
+    raw_text = nlu_result.get("transcribed_text", "")
+    category = nlu_result["category"]
+    location = nlu_result["location"]
+    urgency = nlu_result["urgency"]
+    language_detected = nlu_result["language_detected"]
+
+    complaint_id = db.insert_complaint(
+        raw_text=raw_text,
+        category=category,
+        location=location,
+        urgency=urgency,
+        language_detected=language_detected
+    )
+
+    district = db.get_district(location) if location != "Unknown" else None
+    increment_amount = 0
+    district_updated = False
+
+    if district:
+        increment_amount = 3 if urgency == "Urgent" else 1
+        db.increment_district_complaints(district["name"], increment_amount)
+        district_updated = True
+
+    return {
+        "status": "success",
+        "complaint_id": complaint_id,
+        "transcribed_text": raw_text,
         "category": category,
         "location": location,
         "urgency": urgency,
@@ -176,6 +230,145 @@ async def simulate_infrastructure_funding(payload: SimulateInput):
         "funded_count": len(funded_set),
         "district_projections": district_projections
     }
+
+
+def estimate_district_cost_cr(d: Dict[str, Any]) -> float:
+    """Estimated capital investment requirement in ₹ Crore based on pop and deficit severity."""
+    base = (d["pop"] / 100000.0) * 8.0 * (0.6 + d["infra_gap"])
+    return round(max(10.0, min(50.0, base)), 1)
+
+
+@app.post("/optimize")
+async def optimize_budget_allocation(payload: OptimizeInput):
+    """
+    Automated Capital Allocation Optimizer (0/1 Knapsack Solver).
+    Finds the optimal combination of unfunded districts to fund under a given budget (₹ Cr)
+    that maximizes national infrastructure coverage gain.
+    """
+    districts = db.get_all_districts()
+    if not districts:
+        raise HTTPException(status_code=404, detail="No districts found")
+
+    budget_cr = float(payload.budget_cr)
+    scored = scoring.rank_districts(districts)
+    unfunded = [d for d in scored if not d["funded"]]
+
+    n = len(districts)
+    candidates = []
+    for d in unfunded:
+        cost = estimate_district_cost_cr(d)
+        indiv_gain = round(min(0.35, d["infra_gap"]) / n, 4)
+        candidates.append({
+            "name": d["name"],
+            "category": d["category"],
+            "pop": d["pop"],
+            "infra_gap": d["infra_gap"],
+            "score": d["score"],
+            "cost_cr": cost,
+            "individual_gain": indiv_gain
+        })
+
+    best_combo = []
+    best_gain = 0.0
+    best_score_sum = 0.0
+    best_cost = 0.0
+
+    num_candidates = len(candidates)
+    for r in range(1, num_candidates + 1):
+        for combo in combinations(candidates, r):
+            total_c = sum(c["cost_cr"] for c in combo)
+            if total_c <= budget_cr:
+                funded_names = set(c["name"].lower() for c in combo)
+                curr_covs = [max(0.0, min(1.0, 1.0 - d["infra_gap"])) for d in districts]
+                proj_covs = [
+                    min(1.0, 1.0 - d["infra_gap"] + 0.35) if (d["funded"] or d["name"].lower() in funded_names)
+                    else max(0.0, min(1.0, 1.0 - d["infra_gap"]))
+                    for d in districts
+                ]
+                gain = round((sum(proj_covs) - sum(curr_covs)) / n, 4)
+                score_sum = sum(c["score"] for c in combo)
+
+                if (gain > best_gain) or (abs(gain - best_gain) < 1e-5 and score_sum > best_score_sum):
+                    best_gain = gain
+                    best_score_sum = score_sum
+                    best_cost = total_c
+                    best_combo = list(combo)
+
+    curr_national = round(sum(max(0.0, min(1.0, 1.0 - d["infra_gap"])) for d in districts) / n, 3)
+    proj_national = round(curr_national + best_gain, 3)
+
+    return {
+        "budget_cr": budget_cr,
+        "allocated_cr": round(best_cost, 1),
+        "remaining_cr": round(budget_cr - best_cost, 1),
+        "selected_districts": [c["name"] for c in best_combo],
+        "selected_count": len(best_combo),
+        "current_national_coverage": curr_national,
+        "projected_national_coverage": proj_national,
+        "gain": round(best_gain, 3),
+        "districts_breakdown": [
+            {
+                "name": c["name"],
+                "category": c["category"],
+                "cost_cr": c["cost_cr"],
+                "priority_score": c["score"],
+                "infra_gap_pct": int(round(c["infra_gap"] * 100)),
+                "is_recommended": True
+            }
+            for c in best_combo
+        ]
+    }
+
+
+@app.get("/export/csv")
+async def export_priorities_csv():
+    """
+    Exports the complete national infrastructure priority ranking and rationale as a downloadable CSV.
+    """
+    districts = db.get_all_districts()
+    scored = scoring.rank_districts(districts)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "National Rank",
+        "District Name",
+        "Sector",
+        "Priority Score",
+        "Total Grievances",
+        "Population",
+        "Infrastructure Deficit (%)",
+        "Estimated Cost (INR Cr)",
+        "Funding Status",
+        "Equity Factor",
+        "Algorithmic Rationale"
+    ])
+
+    for idx, d in enumerate(scored, 1):
+        cost = estimate_district_cost_cr(d)
+        writer.writerow([
+            idx,
+            d["name"],
+            d["category"],
+            d["score"],
+            d["complaints"],
+            d["pop"],
+            f"{int(round(d['infra_gap'] * 100))}%",
+            f"INR {cost} Cr",
+            "Funded (Active)" if d["funded"] else "Unfunded (Candidate)",
+            f"{d['equity']}x",
+            d["why"]
+        ])
+
+    csv_data = output.getvalue()
+    return Response(
+        content=csv_data,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="setu_national_priorities.csv"',
+            "Access-Control-Expose-Headers": "Content-Disposition"
+        }
+    )
 
 
 @app.get("/impact")

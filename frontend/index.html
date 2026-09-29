@@ -142,7 +142,31 @@
     .header-actions {
       display: flex;
       align-items: center;
-      gap: 1.25rem;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .btn-dossier {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #FFFFFF;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 0.35rem 0.75rem;
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .btn-dossier:hover {
+      background: rgba(255, 255, 255, 0.18);
+      border-color: var(--amber);
+      color: var(--amber);
+      transform: translateY(-1px);
     }
 
     .status-pulse {
@@ -1346,6 +1370,15 @@
       </div>
 
       <div class="header-actions">
+        <a href="/export/csv" class="btn-dossier" title="Download National Priority Matrix (CSV)" download="setu_national_priorities.csv">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          Export CSV
+        </a>
+        <button onclick="window.print()" class="btn-dossier" title="Print or save executive briefing dossier">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-4 11H9v-5h6v5zm4-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-2-9H7v3h10V3z"/></svg>
+          Print
+        </button>
+
         <div class="status-pulse">
           <div class="pulse-dot"></div>
           <span>Decision Engine Active</span>
@@ -1449,6 +1482,11 @@
             <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
             <span id="voiceBtnText">Voice Input</span>
           </button>
+          <label for="audioFileInput" class="btn btn-voice" title="Upload audio grievance recording (.mp3, .wav, .m4a)" style="cursor: pointer; margin: 0; display: inline-flex; align-items: center; gap: 0.4rem;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+            <span>Upload Voice Note</span>
+            <input type="file" id="audioFileInput" accept="audio/*" style="display: none;">
+          </label>
         </div>
         <div id="voiceStatus" style="font-size: 0.8rem; color: var(--text-muted); font-style: italic;"></div>
       </div>
@@ -1649,6 +1687,24 @@
       </div>
       <div class="card-subtitle">
         Select target districts to fund. The simulator projects post-completion national coverage gain (assuming funded projects close +35% infrastructure gap).
+      </div>
+
+      <!-- Capital Budget Optimizer -->
+      <div class="optimizer-control-bar" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; margin: 1rem 0 1.25rem 0; padding: 0.85rem 1.25rem; background: var(--paper-subtle); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <span style="font-weight: 600; font-size: 0.85rem; color: var(--navy);">Capital Budget:</span>
+          <div style="position: relative; display: inline-flex; align-items: center;">
+            <span style="position: absolute; left: 10px; color: var(--text-muted); font-size: 0.85rem; font-weight: 600;">₹</span>
+            <input type="number" id="budgetInput" value="50" min="10" max="250" step="5" style="width: 100px; padding: 0.4rem 0.6rem 0.4rem 1.5rem; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.9rem; font-weight: 600; background: var(--paper);">
+            <span style="margin-left: 6px; font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Cr</span>
+          </div>
+          <button id="optimizeBtn" class="btn btn-primary" style="padding: 0.4rem 1rem; font-size: 0.85rem; background: var(--amber); color: #000; border: none; font-weight: 700; cursor: pointer;">
+            ⚡ Auto-Optimize Allocation
+          </button>
+        </div>
+        <div id="optimizerResultNote" style="font-size: 0.82rem; color: var(--teal); font-weight: 600;">
+          Ready: Enter capital limit to auto-select maximum coverage gain.
+        </div>
       </div>
 
       <div class="sim-districts-grid" id="simCheckboxes">
@@ -1881,6 +1937,88 @@
         state.selectedState = e.target.value;
         renderStateShares();
       });
+
+      // Audio file upload listener
+      const audioFileInput = document.getElementById('audioFileInput');
+      if (audioFileInput) {
+        audioFileInput.addEventListener('change', async (e) => {
+          const file = e.target.files && e.target.files[0];
+          if (!file) return;
+
+          voiceStatus.textContent = `Uploading & transcribing "${file.name}" with Gemini...`;
+          btnSpinner.style.display = 'inline-block';
+          btnText.textContent = 'Transcribing Voice...';
+
+          try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const res = await fetch('/complaints/audio', {
+              method: 'POST',
+              body: formData
+            });
+            const data = await res.json();
+
+            if (data.transcribed_text) {
+              complaintInput.value = data.transcribed_text;
+            }
+
+            renderAnalysisChips(data);
+            voiceStatus.textContent = `Voice note processed: ${data.category} | ${data.location} (${data.language_detected})`;
+
+            await loadData();
+            renderMap();
+            renderRanking();
+          } catch (err) {
+            console.error('Audio upload error:', err);
+            voiceStatus.textContent = 'Voice processing error. Please try typing text.';
+          } finally {
+            btnSpinner.style.display = 'none';
+            btnText.textContent = 'Analyze & Prioritize';
+            audioFileInput.value = '';
+          }
+        });
+      }
+
+      // Capital budget optimizer listener
+      const optimizeBtn = document.getElementById('optimizeBtn');
+      const budgetInput = document.getElementById('budgetInput');
+      const optimizerResultNote = document.getElementById('optimizerResultNote');
+
+      if (optimizeBtn) {
+        optimizeBtn.addEventListener('click', async () => {
+          const budget = parseFloat(budgetInput.value) || 50;
+          optimizeBtn.disabled = true;
+          optimizeBtn.textContent = 'Solving...';
+          try {
+            const res = await fetch('/optimize', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ budget_cr: budget })
+            });
+            const optData = await res.json();
+            state.fundedSelection.clear();
+            (optData.selected_districts || []).forEach(name => state.fundedSelection.add(name));
+
+            document.querySelectorAll('#simCheckboxes label').forEach(lbl => {
+              const input = lbl.querySelector('input');
+              const shouldCheck = state.fundedSelection.has(input.value);
+              input.checked = shouldCheck;
+              if (shouldCheck) lbl.classList.add('checked');
+              else lbl.classList.remove('checked');
+            });
+
+            await triggerSimulation();
+            optimizerResultNote.textContent = `Allocated ₹${optData.allocated_cr} Cr (${optData.selected_count} districts) under ₹${optData.budget_cr} Cr cap (Gain: +${(optData.gain * 100).toFixed(1)}%). Remaining: ₹${optData.remaining_cr} Cr.`;
+          } catch (err) {
+            console.error('Optimization error:', err);
+            optimizerResultNote.textContent = 'Optimization failed. Try again.';
+          } finally {
+            optimizeBtn.disabled = false;
+            optimizeBtn.textContent = '⚡ Auto-Optimize Allocation';
+          }
+        });
+      }
     }
 
     // Voice recognition using Web Speech API

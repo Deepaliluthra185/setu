@@ -83,7 +83,24 @@ def test_all():
     trends_data = res.json()
     print(f"[OK] GET /trends verified: Months={trends_data['trends']['months']}, Receipts len={len(trends_data['trends']['receipts'])}")
 
-    # 7. Test GET /docs
+    # 7. Test POST /optimize
+    print("\n--- Testing POST /optimize ---")
+    res = requests.post(f"{BASE_URL}/optimize", json={"budget_cr": 50.0})
+    assert res.status_code == 200, f"POST /optimize failed: {res.text}"
+    opt_data = res.json()
+    assert opt_data["allocated_cr"] <= 50.0
+    assert opt_data["gain"] > 0
+    print(f"[OK] POST /optimize (Budget=50 Cr): Allocated={opt_data['allocated_cr']} Cr, Selected={opt_data['selected_districts']}, Coverage Gain=+{opt_data['gain']:.3f}")
+
+    # 8. Test GET /export/csv
+    print("\n--- Testing GET /export/csv ---")
+    res = requests.get(f"{BASE_URL}/export/csv")
+    assert res.status_code == 200, f"GET /export/csv failed: {res.text}"
+    assert "National Rank" in res.text
+    assert "District Name" in res.text
+    print(f"[OK] GET /export/csv verified (Content length: {len(res.text)} bytes)")
+
+    # 9. Test GET /docs
     res = requests.get(f"{BASE_URL}/docs")
     assert res.status_code == 200, "GET /docs failed"
     print("[OK] GET /docs is accessible (FastAPI Swagger UI)")
