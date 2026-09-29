@@ -1,0 +1,28 @@
+# Secrets & Environment Variables (CRITICAL)
+.env
+*.env
+.env.local
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environments
+venv/
+env/
+.venv/
+ENV/
+
+# Database
+*.db
+*.sqlite3
+
+# Logs & temp
+*.log
+scratch/
+.system_generated/

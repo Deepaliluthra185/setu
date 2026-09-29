@@ -1,0 +1,33 @@
+{
+  "source": "CPGRAMS Real Public Data (Jan-Jun 2026) & CSC Grievance Report (Jul 2026)",
+  "is_real_data": true,
+  "trends": {
+    "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+    "receipts": [71714, 75914, 83365, 88057, 85900, 96190],
+    "disposal": [64702, 61844, 75245, 77445, 84365, 93170],
+    "pending": [178674, 192877, 201088, 211701, 213190, 216032]
+  },
+  "category_shares_by_state": {
+    "UP": {
+      "PMKISAN": 9,
+      "PDS": 8,
+      "Aadhaar Update": 6,
+      "Aadhaar deactivated": 5,
+      "LPG": 4
+    },
+    "Karnataka": {
+      "Schemes": 15,
+      "Training": 6,
+      "Hospitals": 5,
+      "Health schemes": 4,
+      "Information": 4
+    },
+    "Bihar": {
+      "LPG": 20,
+      "Aadhaar deactivated": 8,
+      "EPFO": 8,
+      "PDS": 6,
+      "Customer service": 6
+    }
+  }
+}

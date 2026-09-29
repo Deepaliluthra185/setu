@@ -1,0 +1,10 @@
+name,x,y,pop,complaints,infra_gap,funded,category
+Rampur,90,70,180000,64,0.81,false,Water
+Bharatpur,230,60,95000,22,0.35,true,Roads
+Sundargram,380,90,260000,88,0.72,false,Power
+Kotwali,150,170,60000,14,0.28,false,Sanitation
+Devnagar,300,180,410000,120,0.90,false,Water
+Anantpur,420,210,75000,19,0.40,false,Health
+Nirmalpur,110,270,140000,41,0.60,false,Roads
+Vasant Vihar,260,290,52000,9,0.20,true,Sanitation
+Chandanpur,390,300,198000,57,0.68,false,Power
