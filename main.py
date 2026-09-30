@@ -116,47 +116,58 @@ async def process_complaint(payload: ComplaintInput):
 async def process_audio_complaint(file: UploadFile = File(...)):
     """
     Multimodal grievance intake for vernacular voice notes (.mp3, .wav, .m4a, .ogg).
-    Uses Gemini 2.5 Flash native audio comprehension to transcribe and extract parameters.
+    Uses Gemini native audio comprehension to transcribe and extract parameters.
     """
-    contents = await file.read()
-    mime = file.content_type or "audio/mp3"
-    nlu_result = nlu.analyze_audio_complaint(contents, mime)
+    try:
+        contents = await file.read()
+        if not contents:
+            raise HTTPException(status_code=400, detail="Empty audio file provided.")
 
-    raw_text = nlu_result.get("transcribed_text", "")
-    category = nlu_result["category"]
-    location = nlu_result["location"]
-    urgency = nlu_result["urgency"]
-    language_detected = nlu_result["language_detected"]
+        mime = file.content_type or "audio/mp3"
+        nlu_result = nlu.analyze_audio_complaint(contents, mime)
 
-    complaint_id = db.insert_complaint(
-        raw_text=raw_text,
-        category=category,
-        location=location,
-        urgency=urgency,
-        language_detected=language_detected
-    )
+        raw_text = nlu_result.get("transcribed_text", "")
+        category = nlu_result.get("category", "General")
+        location = nlu_result.get("location", "Unknown")
+        urgency = nlu_result.get("urgency", "Normal")
+        language_detected = nlu_result.get("language_detected", "Audio")
 
-    district = db.get_district(location) if location != "Unknown" else None
-    increment_amount = 0
-    district_updated = False
+        complaint_id = db.insert_complaint(
+            raw_text=raw_text,
+            category=category,
+            location=location,
+            urgency=urgency,
+            language_detected=language_detected
+        )
 
-    if district:
-        increment_amount = 3 if urgency == "Urgent" else 1
-        db.increment_district_complaints(district["name"], increment_amount)
-        district_updated = True
+        district = db.get_district(location) if location != "Unknown" else None
+        increment_amount = 0
+        district_updated = False
 
-    return {
-        "status": "success",
-        "complaint_id": complaint_id,
-        "transcribed_text": raw_text,
-        "category": category,
-        "location": location,
-        "urgency": urgency,
-        "language_detected": language_detected,
-        "district_matched": district_updated,
-        "district_name": district["name"] if district else None,
-        "complaints_added": increment_amount
-    }
+        if district:
+            increment_amount = 3 if urgency == "Urgent" else 1
+            db.increment_district_complaints(district["name"], increment_amount)
+            district_updated = True
+
+        return {
+            "status": "success",
+            "complaint_id": complaint_id,
+            "transcribed_text": raw_text,
+            "category": category,
+            "location": location,
+            "urgency": urgency,
+            "language_detected": language_detected,
+            "district_matched": district_updated,
+            "district_name": district["name"] if district else None,
+            "complaints_added": increment_amount
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"Failed to process audio complaint: {str(e)}"}
+        )
 
 
 @app.get("/districts")

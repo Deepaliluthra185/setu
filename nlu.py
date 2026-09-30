@@ -279,10 +279,6 @@ def analyze_audio_complaint(file_bytes: bytes, mime_type: str = "audio/mp3") -> 
         }
 
     try:
-        from google import genai
-        from google.genai import types
-
-        client = genai.Client(api_key=api_key)
         prompt = f"""You are an AI civic grievance classifier for India's Setu infrastructure platform.
 Listen carefully to this citizen voice recording and extract structured JSON with these exact keys:
 - "transcribed_text": Verbatim or translated transcription of what the citizen said
@@ -293,12 +289,33 @@ Listen carefully to this citizen voice recording and extract structured JSON wit
 
 Respond with ONLY valid JSON:"""
 
-        audio_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[audio_part, prompt]
-        )
-        raw = response.text.strip() if response and response.text else None
+        raw = None
+        try:
+            from google import genai
+            from google.genai import types
+
+            client = genai.Client(api_key=api_key)
+            audio_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[audio_part, prompt]
+            )
+            raw = response.text.strip() if response and response.text else None
+        except Exception:
+            try:
+                import google.generativeai as legacy_genai
+                legacy_genai.configure(api_key=api_key)
+                model = legacy_genai.GenerativeModel("gemini-1.5-flash")
+                response = model.generate_content(
+                    [
+                        {"mime_type": mime_type, "data": file_bytes},
+                        prompt
+                    ]
+                )
+                raw = response.text.strip() if response and response.text else None
+            except Exception:
+                raw = None
+
         if not raw:
             raise ValueError("Empty response from model")
 

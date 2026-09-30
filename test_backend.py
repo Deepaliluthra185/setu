@@ -100,7 +100,18 @@ def test_all():
     assert "District Name" in res.text
     print(f"[OK] GET /export/csv verified (Content length: {len(res.text)} bytes)")
 
-    # 9. Test GET /docs
+    # 9. Test POST /complaints/audio (multipart/form-data)
+    print("\n--- Testing POST /complaints/audio (multipart) ---")
+    dummy_wav = b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x44\xac\x00\x00\x88\x58\x01\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
+    files = {"file": ("test_voice.wav", dummy_wav, "audio/wav")}
+    res = requests.post(f"{BASE_URL}/complaints/audio", files=files)
+    assert res.status_code == 200, f"POST /complaints/audio failed: {res.text}"
+    audio_res = res.json()
+    assert audio_res["status"] == "success"
+    assert "complaint_id" in audio_res
+    print(f"[OK] POST /complaints/audio verified (ID={audio_res['complaint_id']}, Category={audio_res['category']}, Urgency={audio_res['urgency']})")
+
+    # 10. Test GET /docs
     res = requests.get(f"{BASE_URL}/docs")
     assert res.status_code == 200, "GET /docs failed"
     print("[OK] GET /docs is accessible (FastAPI Swagger UI)")
